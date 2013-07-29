@@ -3,7 +3,7 @@ Magento FastIndexer
 
 Still closed source. Currently maintained in a private repo on bitbucket.
 
-Makes indexing of your Magento store around x% faster!
+Makes indexing of your Magento store around x times faster!
 
 Install (via modman)
 
@@ -16,19 +16,16 @@ $ cd shell
 $ php -f index.php reindexall
 ```
 
-
 What it does?
 -------------
 
-Some magic
-
+Some magic :-)
 
 About
 -----
 - version: 1.0.0
 - extension key: SchumacherFM_FastIndexer
-- [extension on GitHub](https://github.com/SchumacherFM)
-- [direct download link](https://github.com/SchumacherFM)
+- [extension on GitHub](https://github.com/SchumacherFM/Magento-FastIndexer)
 
 
 Compatibility
@@ -39,7 +36,6 @@ Compatibility
 I'm using http://php-osx.liip.ch/ with version 5.4.10 and 5.3.19.
 
 It could run with Magento < 1.5 but still not tested.
-
 
 Todo / Next Versions
 --------------------
