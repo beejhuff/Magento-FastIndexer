@@ -51,7 +51,7 @@ On my MacBook Air Mid 2012 tested with the following stores.
 
 Condition for all tests: no load on the frontend. Just indexing.
 
-## Stoeckli
+## Customer: Swiss Ski manufacturer
 
 ### catalog_url
 
