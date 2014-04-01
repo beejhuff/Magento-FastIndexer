@@ -1,163 +1,234 @@
-Magento FastIndexer
-===================
+FastIndexer
+===========
 
-Still closed source. Currently maintained in a private repo on bitbucket.
+Pre-Alpha due to a nasty bug :-(
 
-Makes indexing of your Magento store around x times faster!
+- Integrates seamlessly into the existing Magento indexer process.
+- Does not change the core Magento indexer logic!
+- Only one class rewrite! (Adding an event in `Mage_Index_Model_Process::reindexAll()`)
+- Indexing blocks the frontend for only ~0.003 seconds instead of minutes with the normal indexer.
+- The frontend will not be affected anymore by any reindex process.
+- Speeds up the whole indexing process of your Magento store. You can enable or disable the module in the backend and test the speed difference by yourself.
+- Full reindexing now even under high frontend load possible (Citation/Test needed ... ).
+- Limits the amount of SQL queries
+- Even integrates into your custom indexer processes (theoretically, talk to me).
 
-Install (via modman)
+The FastIndexer is only available on the command line.
 
-Go to backend -> System -> Configuration -> Advanced -> @SchumacherFM -> FastIndexer and enable there the FastIndexer
-
-Then run:
 ```
-$ cd magento-site-folder
-$ cd shell
-$ php -f index.php reindexall
+$ php/hhvm index.php reindexall
 ```
 
-What it does?
--------------
+Configuration options
+---------------------
 
-Some magic :-)
+Accessible via *System -> Configuration -> System -> FastIndexer*
 
-About
------
-- version: 1.0.0
-- extension key: SchumacherFM_FastIndexer
-- [extension on GitHub](https://github.com/SchumacherFM/Magento-FastIndexer)
+### Enable FastIndexer
 
+Enable or disable the FastIndexer. This is useful to become yourself aware about the differences.
 
-Compatibility
--------------
-- Magento >= 1.x Every version which has the event resource_get_tablename implemented
-- php >= 5.2.0
+### Drop old tables
 
-I'm using http://php-osx.liip.ch/ with version 5.4.10 and 5.3.19.
+Default values: YES. For testing purposes or in development you can disable that option.
 
-It could run with Magento < 1.5 but still not tested.
+Disabling it also means that the process might be a little bit slower and you are collecting tons of data by generating old index tables.
 
-Todo / Next Versions
---------------------
-- nothing ...
+### Shadow Databases
 
-# Performance
+FastIndexer needs two Shadow Databases which must be on the same file system as the Magento store core database.
+
+You have two text fields in the backend to enter the different names of the Shadow Databases.
+
+The backend configuration section also checks for you if the current Magento core database user can access those two databases. If not it will display a warning. FastIndexer cannot create by itself those two databases automatically. Ask your DevOps for assistance.
+
+### Verifying Installation of PDO class
+
+FastIndexer comes with a custom `Pdo_MySQL` PHP class which also fixes two evil bugs in the default `Varien_Db_Adapter_Pdo_Mysql` class. It is 100% compatible.
+
+The FastIndexer PDO class must be configured in `app/etc/local.xml`.
+
+If you have correctly installed the FastIndexer PDO class then a green sign shows up in the system configuration section otherwise you will see the installation instructions.
+
+### URL Rewrites: Copy all custom URLs
+
+Enable this option if you wish to copy all custom URLs. Before enabling this option be sure that the permanent rewrite generating bug in Magento ~<=1.7 has been fixed. Otherwise you will add tens of thousands useless rewrites with each reindexing. If this option is disabled only the rewrites created by the store maintainer will be copied. But this can be slow because a regular expression will be used to determine all custom rewrites. If set to yes no regex will be used.
+
+##### Checking for system generated custom redirect permanent URLs
+
+With the following SQL Query you can check the system generated custom redirect permanent URLs:
+
+```SQL
+SELECT * FROM `core_url_rewrite` WHERE is_system=0 AND id_path RLIKE '[0-9]+\_[0-9]+'
+```
+
+If that query returns nothing then you can set this option to **Yes**.
+
+##### Checking for your custom created URLs
+
+You can create custom URL redirects at *Catalog -> URL Rewrite Management*. With the following SQL Query you can check if you have custom URLs:
+
+```SQL
+SELECT * FROM `core_url_rewrite` WHERE is_system=0 AND id_path NOT RLIKE '[0-9]+\_[0-9]+'
+```
+
+Explaining the operation of FastIndexer
+---------------------------------------
+
+All index processes have one thing in common: They block the frontend during their whole index duration. That's why many store owners run a full reindex only during the night or even more seldom.
+
+Some indexer truncates the index tables. If in that moment a potential customer wants to buy something he/she will fail because of empty tables.
+
+Some indexer are doing complex operations for calculating differences between already indexed data and new data. This costs a lot of time and the index tables have a lock for updates.
+
+#### Technial Explanations
+
+Reindexing will be done in the so called Shadow Databases.
+
+Therefore the table swapping operation is done atomically after the reindexing, which means that no other session can access any of the index/flat tables while the swapping is running.
+
+This swapping operation needs **~0.003 seconds**.
+
+If there are any database triggers associated with an index/flat table which is swapped to a different Shadow Database, then the swapping operation will fail.
+
+When the swapping operation is running and there are any locked tables or active transactions then the swapping will fail.
+
+**If the swapping fails nothing will break.** Just rerun the indexer.
+
+The current Magento database user must also have the ALTER and DROP privileges on the original table, and the SELECT,ALTER,DROP,CREATE and INSERT privileges on the new tables in the Shadow Databases.
+
+Performance
+-----------
 
 On my MacBook Air Mid 2012 tested with the following stores.
 
-Condition for all tests: no load on the frontend. Just indexing.
+Condition for all tests: no load on the frontend. Just indexing of previous reindexed tables.
 
-## Customer: Swiss Ski manufacturer
+All tests run several times via:
+
+```
+$ time php indexer.php reindexall
+Product Attributes index was rebuilt successfully
+Product Prices index was rebuilt successfully
+Catalog URL Rewrites index was rebuilt successfully
+Product Flat Data index was rebuilt successfully
+Category Flat Data index was rebuilt successfully
+Category Products index was rebuilt successfully
+Catalog Search Index index was rebuilt successfully
+Stock Status index was rebuilt successfully
+```
+
+### Magento 1.8 default installation
+
+- 3 store views
+- 27 categories
+- 120 products
+
+| FastIndexer | real     | user | sys| Query Count |
+|-----------|----------|-------|----|--------------|
+| Disabled  | 14.209s | 5.836s | 0.370s | 3275 |
+| Enabled  |  7.490s |  4.265s | 0.179s | 2670 |
+
+
+### Shop C: Magento EE
+
+@todo
+
+### Shop Z: Magento 1.7
+
+- One store view
+- ~ 15.500 categories
+- ~ 45.400 products
+
+
+| FastIndexer | real     | user | sys| Query Count |
+|-----------|----------|-------|----|--------------|
+| Disabled  | 14m8.919s | 5m0.248s | 0m9.695s | @todo |
+| Enabled  | 10m37.517s | 4m51.361s | 0m8.864s | @todo |
+
 
 ### catalog_url
 
-Empty core rewrite table in the first run.
-
-4 runs without FastIndexer:
 ```
 $ time php indexer.php --reindex catalog_url
 Catalog URL Rewrites index was rebuilt successfully
 ```
 
+    :::text
     run real        user        sys
-    1   1m25.264s   1m4.542s    0m2.363s
-    2   3m50.983s   2m50.309s   0m7.267s
-    3   3m48.984s   2m44.590s   0m7.080s
-    4   3m50.500s   2m41.907s   0m7.003s
 
-4 runs with enabled FastIndexer:
 
-    run real        user        sys
-    1   2m9.640s    1m25.179s   0m2.756s
-    2   1m45.722s   1m11.917s   0m2.159s
-    3   1m44.896s   1m10.276s   0m2.070s
-    4   1m44.914s   1m9.794s    0m2.101s
-
-Bug: all entries where is_system=0 will be lost ...
 
 ### catalog_product_attribute
 
-Condition: tables are not truncated.
 
 ```
 $ time php indexer.php --reindex catalog_product_attribute
 Product Attributes index was rebuilt successfully
 ```
 
-FastIndexer disabled:
 
+    :::text
     run real        user        sys
-    1   0m36.035s   0m2.986s    0m0.171s
-    2   0m34.434s   0m2.937s    0m0.156s
-    3   0m35.485s   0m3.033s    0m0.155s
 
-FastIndexer enabled:
-
-    run real        user        sys
-    1   0m26.443s   0m2.807s    0m0.155s
-    2   0m23.740s   0m2.793s    0m0.151s
-    3   0m26.503s   0m3.203s    0m0.171s
 
 ### catalog_product_price
 
-Condition: tables are not truncated.
 
 ```
 $ time php indexer.php --reindex catalog_product_price
 Product Prices index was rebuilt successfully
 ```
 
-FastIndexer disabled:
-
+    :::text
     run real        user        sys
-    1   0m33.496s   0m1.052s    0m0.059s
-    2   0m33.963s   0m0.997s    0m0.050s
-    3   0m33.695s   0m1.010s    0m0.051s
 
-FastIndexer enabled:
-
-    run real        user        sys
-    1   0m22.719s   0m1.094s    0m0.059s
-    2   0m21.737s   0m1.089s    0m0.056s
-    3   0m21.404s   0m1.058s    0m0.053s
 
 ### catalog_product_flat
 
-Condition: tables are not truncated. 8 Store Views.
 
 ```
 $ time php indexer.php --reindex catalog_product_flat
 ```
 
-FastIndexer disabled:
-
-    run real        user        sys
-    1   0m36.161s   0m2.706s    0m0.356s
-    2   0m35.819s   0m2.578s    0m0.349s
-    3   0m36.285s   0m2.785s    0m0.359s
-
-FastIndexer enabled:
-
     :::text
     run real        user        sys
-    1
-    2
-    3
+
+
+About/History
+-------------
+
+Extension key: SchumacherFM_FastIndexer
+
+Version 1.0.0
+
+- Initial Release
+
+Compatibility
+-------------
+
+- Magento CE >= 1.6.2
+- php >= 5.2.0
+
+The FastIndexer will not run with Magento CE < 1.6.2 because elementary events are missing. If you are interested in running FastIndexer with lower Magneto version write me, there is a solution.
 
 
 Support / Contribution
 ----------------------
 
-Report a bug or send me a pull request.
+Report a bug using the issue tracker.
 
 
 Licence
 -------
-[OSL - Open Software Licence 3.0](http://opensource.org/licenses/osl-3.0.php)
+
+Sorry this time. Proprietary. Ask for the price.
 
 Author
 ------
 
 [Cyrill Schumacher](https://github.com/SchumacherFM)
+
+[My pgp public key](http://www.schumacher.fm/cyrill.asc)
 
 Made in Sydney, Australia :-)
