@@ -222,7 +222,7 @@ Report a bug using the issue tracker.
 Licence
 -------
 
-Sorry this time. Proprietary. Ask for the price.
+Don't know. Maybe still closed source but you'll get it with a donation to [http://www.seashepherd.org/](http://www.seashepherd.org/)
 
 Author
 ------
