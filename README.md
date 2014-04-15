@@ -1,17 +1,19 @@
 FastIndexer
 ===========
 
-Pre-Alpha due to a nasty bug :-(
+No more empty results in the frontend due to a long taking reindex process!
 
 - Integrates seamlessly into the existing Magento indexer process.
 - Does not change the core Magento indexer logic!
 - Only one class rewrite! (Adding an event in `Mage_Index_Model_Process::reindexAll()`)
 - Indexing blocks the frontend for only ~0.003 seconds instead of minutes with the normal indexer.
 - The frontend will not be affected anymore by any reindex process.
-- Speeds up the whole indexing process of your Magento store. You can enable or disable the module in the backend and test the speed difference by yourself.
+- Speeds up some indexing processes of your Magento store. 
+- You can enable or disable the module in the backend and test the speed difference by yourself.
 - Full reindexing now even under high frontend load possible (Citation/Test needed ... ).
-- Limits the amount of SQL queries
+- Limits the amount of SQL queries in some cases
 - Even integrates into your custom indexer processes (theoretically, talk to me).
+- Indexer (catalogpermissions & targetrule) for Enterprise Edition will also be considered
 
 The FastIndexer is only available on the command line.
 
@@ -19,8 +21,7 @@ The FastIndexer is only available on the command line.
 $ php/hhvm index.php reindexall
 ```
 
-Configuration options (Backend)
--------------------------------
+## Configuration options (Backend)
 
 Accessible via *System -> Configuration -> System -> FastIndexer*
 
@@ -72,8 +73,11 @@ You can create custom URL redirects at *Catalog -> URL Rewrite Management*. With
 SELECT * FROM `core_url_rewrite` WHERE is_system=0 AND id_path NOT RLIKE '[0-9]+\_[0-9]+'
 ```
 
-Configuration options (local.xml)
--------------------------------
+## Configuration options (local.xml)
+
+### Changing the type instance
+
+Please see the section *Verifying Installation of PDO class* above.
 
 ### Low Level Optimization
 
@@ -97,10 +101,10 @@ Use for node `fiQuoteOpt` the value 1 for enable or any other value for disabled
                     <host><![CDATA[localhost]]></host>
                     <username>...</username>
 					...
-                    
+
                     <!--FastIndexer quote() optimization: 1/0-->
                     <fiQuoteOpt>1</fiQuoteOpt>
-                     
+
                 </connection>
             </default_setup>
         </resources>
@@ -110,8 +114,12 @@ Use for node `fiQuoteOpt` the value 1 for enable or any other value for disabled
 
 It must be set in the local.xml file because quote() method is called even before the Magento configuration is available.
 
-Explaining the operation of FastIndexer
----------------------------------------
+## How do the Magento default indexer work? (Full reindex)
+
+Investigation of the logged SQL statements: Most indexer are completely deleting the index tables. Some of them only for a store view. But both cases are equal because each time the frontend customer has no access to the data (prices, stocks, search results ...) and gets empty results. Lost a customer and made less profit :-(
+
+
+## Explaining the operation of FastIndexer
 
 All index processes have one thing in common: They block the frontend during their whole index duration. That's why many store owners run a full reindex only during the night or even more seldom.
 
@@ -140,20 +148,16 @@ Performance
 
 On my MacBook Air Mid 2012 tested with the following stores.
 
-Condition for all tests: no load on the frontend. Just indexing of previous reindexed tables.
+Condition for all tests:
 
-All tests run several times via:
+- No load on the frontend. 
+- Just indexing of previous reindexed tables. 
+- All indexe commands ran 3x and the median has been calculated. 
+- `SET GLOBAL query_cache_type=OFF;` has been set.
+- At the 4th run all queries have been counted in `Zend_Db_Statement_Pdo::_execute()`.
 
 ```
-$ time php indexer.php reindexall
-Product Attributes index was rebuilt successfully
-Product Prices index was rebuilt successfully
-Catalog URL Rewrites index was rebuilt successfully
-Product Flat Data index was rebuilt successfully
-Category Flat Data index was rebuilt successfully
-Category Products index was rebuilt successfully
-Catalog Search Index index was rebuilt successfully
-Stock Status index was rebuilt successfully
+$ time -p php indexer.php --reindex <code>
 ```
 
 ### Magento 1.8 default installation
@@ -162,17 +166,51 @@ Stock Status index was rebuilt successfully
 - 27 categories
 - 120 products
 
-| FastIndexer | real     | user | sys| Query Count |
-|-----------|----------|-------|----|--------------|
-| Disabled  | 14.209s | 5.836s | 0.370s | 3275 |
-| Enabled  |  7.490s |  4.265s | 0.179s | 2670 |
+|Type       | FastIndexer | real     | user | sys| Query Count |
+|-----------|-----------|----------|-------|----|--------------|
+|reindexall | x  | 14.209s | 5.836s | 0.370s | 3275 |
+|reindexall | ✔︎  |  7.490s |  4.265s | 0.179s | 2702 |
 
 
-### Shop C: Magento EE
+### Shop 03: Magento EE 1.12
 
-@todo
+- 3 store views
+- 66 categories
+- 14088 products
 
-### Shop Z: Magento 1.7
+|Type                      | FastIndexer | real     | user | sys| Query Count |
+|--------------------------|-------------|----------|-------|----|--------------|
+|catalog_product_attribute | x    | 29.69s | 8.14s | 0.40s | 208 |
+|... | ✔︎ | 34.18s | 8.39s | 0.42s | 243 |
+|catalog_product_price     | x    | 10.71s  |  1.56s | 0.07s | 173 |
+|...     | ✔︎     |  9.64s  |  1.63s| 0.07s | 248 |
+|catalog_product_flat 	    | x    | 184.31s  | 4.74s | 0.58s | 1,570 |
+|... 	    | ✔︎    | 167.26s  | 2.60s | 0.11s | 530 |
+|catalog_category_flat 	    | x    | 2.43s  | 1.84s | 0.07s | 80 |
+|... 	    | ✔︎    | 2.52s  | 1.84s | 0.07s | 113 |
+|catalog_category_product 	    | x    | 70.37s  | 1.91s | 0.07s | 117 |
+|... 	    | ✔︎    | 31.46s  | 2.09s | 0.08s | 138 |
+|catalogsearch_fulltext 	    | x    | 114.91s  | 2.21s | 0.07s | 8,769 |
+|... 	                                  | ✔︎   | 114.24s  | 2.76s | 0.08s | 8,774 |
+|cataloginventory_stock  | x    | 3.36s  | 1.50s | 0.06s | 32 |
+|... 	                                 | ✔︎    | 3.16s  | 1.38s | 0.06s | 47 |
+|catalog_url  (~245177 URLs) | x | 858.11s    | 637.34s  | 60.95s   | 524,748* |
+|... 	                                 | ✔︎    | 819.44s  | 574.90s | 53.25s | 494,411 |
+
+* added 3701 additional URLs due to the rewrite bug in the URL indexer
+
+### Shop 08: Magento EE 1.12
+
+- 4 store views
+- ~ 240 categories
+- ~ 5000 products
+
+|Type                      | FastIndexer | real     | user | sys| Query Count |
+|--------------------------|-------------|----------|-------|----|--------------|
+|catalog_product_attribute | x    | 0.00s | 0.00s | 0.00s | 0 |
+
+
+### Shop 26: Magento 1.7
 
 - One store view
 - ~ 15.500 categories
@@ -183,54 +221,6 @@ Stock Status index was rebuilt successfully
 |-----------|----------|-------|----|--------------|
 | Disabled  | 14m8.919s | 5m0.248s | 0m9.695s | @todo |
 | Enabled  | 10m37.517s | 4m51.361s | 0m8.864s | @todo |
-
-
-### catalog_url
-
-```
-$ time php indexer.php --reindex catalog_url
-Catalog URL Rewrites index was rebuilt successfully
-```
-
-    :::text
-    run real        user        sys
-
-
-
-### catalog_product_attribute
-
-
-```
-$ time php indexer.php --reindex catalog_product_attribute
-Product Attributes index was rebuilt successfully
-```
-
-
-    :::text
-    run real        user        sys
-
-
-### catalog_product_price
-
-
-```
-$ time php indexer.php --reindex catalog_product_price
-Product Prices index was rebuilt successfully
-```
-
-    :::text
-    run real        user        sys
-
-
-### catalog_product_flat
-
-
-```
-$ time php indexer.php --reindex catalog_product_flat
-```
-
-    :::text
-    run real        user        sys
 
 
 About/History
