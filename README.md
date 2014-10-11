@@ -1,10 +1,12 @@
-FastIndexer
+FastIndexer WIP
 ===========
+
+WIP = Work in Progress
 
 No more empty results in the frontend due to a long taking reindex process!
 
 - Integrates seamlessly into the existing Magento indexer process.
-- Does not change the core Magento indexer logic!
+- Does not change the core Magento indexer logic! (Except URL rewrite if you wish)
 - Only one class rewrite! (Adding an event in `Mage_Index_Model_Process::reindexAll()`)
 - Indexing blocks the frontend for only ~0.003 seconds instead of minutes with the normal indexer.
 - The frontend will not be affected anymore by any reindex process.
@@ -14,6 +16,7 @@ No more empty results in the frontend due to a long taking reindex process!
 - Limits the amount of SQL queries in some cases
 - Even integrates into your custom indexer processes (theoretically, talk to me).
 - Indexer (catalogpermissions & targetrule) for Enterprise Edition will also be considered
+- Removes "unnecessary" joins with url rewrite table in frontend selects (Requires Magento CE >= 1.8)
 
 The FastIndexer is only available on the command line.
 
@@ -228,15 +231,16 @@ About/History
 
 Extension key: SchumacherFM_FastIndexer
 
-Version 1.0.0
+Version 0.0.1
 
 - Initial Release
+- Not ready for production, WIP.
 
 Compatibility
 -------------
 
 - Magento CE >= 1.6.2
-- php >= 5.2.0
+- php >= 5.3.0
 
 The FastIndexer will not run with Magento CE < 1.6.2 because elementary events are missing. If you are interested in running FastIndexer with lower Magneto version write me, there is a solution.
 
@@ -246,11 +250,12 @@ Support / Contribution
 
 Report a bug using the issue tracker.
 
+Clients with in-depth Magento knowledge can have access to the private git repository. Contribution guidelines will follow.
 
 Licence
 -------
 
-Don't know. Maybe still closed source but you'll get it with a donation to [http://www.seashepherd.org/](http://www.seashepherd.org/)
+Proprietary
 
 Author
 ------
